@@ -1,4 +1,6 @@
-use std::io;
+use std::io::{self};
+use termion::event::{Event, Key};
+use termion::input::{TermRead};
 use termion::raw::IntoRawMode;
 use tui::backend::TermionBackend;
 use tui::layout::Constraint;
@@ -21,13 +23,23 @@ fn main() -> Result<(), io::Error> {
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-
+    
     terminal.clear()?;
 
     let runners: Vec<Runner> = vec![];
-    terminal.draw(|f| {
-        f.render_widget(create_table(&runners), f.size());
-    })?;
+    let mut events = io::stdin().events();
+
+    loop {
+        terminal.draw(|f| {
+            f.render_widget(create_table(&runners), f.size());
+        })?;
+        
+        let c = &events.next().unwrap()?;
+        match c {
+            Event::Key(Key::Char('q')) => break,
+            _ => {}
+        }
+    }
 
     Ok(())
 }
