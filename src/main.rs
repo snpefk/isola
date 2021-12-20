@@ -1,11 +1,11 @@
 use std::io::{self};
 use termion::event::{Event, Key};
-use termion::input::{TermRead};
+use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use tui::backend::TermionBackend;
 use tui::layout::Constraint;
 use tui::style::{Color, Modifier, Style};
-use tui::widgets::{Block, Borders, Row, Table};
+use tui::widgets::{Block, Borders, Row, Table, TableState};
 use tui::Terminal;
 
 struct Runner {
@@ -19,61 +19,101 @@ struct Runner {
     status: String,
 }
 
-fn get_runners() -> Vec<Runner> {
-    return vec![
-        Runner {
-            id: 1,
-            description: "self-hosted runner".to_string(),
-            ip_address: "127.0.0.1".to_string(),
-            active: true,
-            is_shared: false,
-            name: "android-ci".to_string(),
-            online: true,
-            status: "active".to_string(),
-        },
-        Runner {
-            id: 2,
-            description: "self-hosted runner".to_string(),
-            ip_address: "127.0.0.1".to_string(),
-            active: true,
-            is_shared: false,
-            name: "android-ci".to_string(),
-            online: true,
-            status: "active".to_string(),
-        },
-        Runner {
-            id: 3,
-            description: "self-hosted runner".to_string(),
-            ip_address: "127.0.0.1".to_string(),
-            active: false,
-            is_shared: false,
-            name: "android-ci".to_string(),
-            online: true,
-            status: "active".to_string(),
-        },
-    ];
+struct App {
+    state: TableState,
+    runners: Vec<Runner>,
+}
+
+impl App {
+    fn new() -> App {
+        App {
+            state: TableState::default(),
+            runners: vec![
+                Runner {
+                    id: 1,
+                    description: "self-hosted runner".to_string(),
+                    ip_address: "127.0.0.1".to_string(),
+                    active: true,
+                    is_shared: false,
+                    name: "android-ci".to_string(),
+                    online: true,
+                    status: "active".to_string(),
+                },
+                Runner {
+                    id: 2,
+                    description: "self-hosted runner".to_string(),
+                    ip_address: "127.0.0.1".to_string(),
+                    active: true,
+                    is_shared: false,
+                    name: "android-ci".to_string(),
+                    online: true,
+                    status: "active".to_string(),
+                },
+                Runner {
+                    id: 3,
+                    description: "self-hosted runner".to_string(),
+                    ip_address: "127.0.0.1".to_string(),
+                    active: false,
+                    is_shared: false,
+                    name: "android-ci".to_string(),
+                    online: true,
+                    status: "active".to_string(),
+                },
+            ],
+        }
+    }
+
+    pub fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.runners.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    pub fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.runners.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
 }
 
 fn main() -> Result<(), io::Error> {
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    
-    terminal.clear()?;
-    let runners: Vec<Runner> = get_runners();
+
+    let mut app = App::new();
     let mut events = io::stdin().events();
 
     loop {
         terminal.draw(|f| {
-            f.render_widget(create_table(&runners), f.size());
+            f.render_stateful_widget(create_table(&app.runners), f.size(), &mut app.state);
         })?;
-        
+
         let c = &events.next().unwrap()?;
         match c {
             Event::Key(Key::Char('q')) => break,
-            _ => {}
+            Event::Key(Key::Down) => app.next(),
+            Event::Key(Key::Up) => app.previous(),
+            _ => { }
         }
     }
+    terminal.clear()?;
 
     Ok(())
 }
