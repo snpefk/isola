@@ -166,7 +166,7 @@ fn create_table(runners: &Vec<Runner>) -> Table {
                 .title(" Runners ")
                 .title_alignment(tui::layout::Alignment::Center),
         )
-        .highlight_style(Style::default().bg(Color::LightCyan))
+        .highlight_style(Style::default().bg(Color::DarkGray))
         .widths(&[
             Constraint::Length(5),
             Constraint::Length(15),
