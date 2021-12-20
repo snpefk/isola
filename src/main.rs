@@ -19,14 +19,48 @@ struct Runner {
     status: String,
 }
 
+fn get_runners() -> Vec<Runner> {
+    return vec![
+        Runner {
+            id: 1,
+            description: "self-hosted runner".to_string(),
+            ip_address: "127.0.0.1".to_string(),
+            active: true,
+            is_shared: false,
+            name: "android-ci".to_string(),
+            online: true,
+            status: "active".to_string(),
+        },
+        Runner {
+            id: 2,
+            description: "self-hosted runner".to_string(),
+            ip_address: "127.0.0.1".to_string(),
+            active: true,
+            is_shared: false,
+            name: "android-ci".to_string(),
+            online: true,
+            status: "active".to_string(),
+        },
+        Runner {
+            id: 3,
+            description: "self-hosted runner".to_string(),
+            ip_address: "127.0.0.1".to_string(),
+            active: false,
+            is_shared: false,
+            name: "android-ci".to_string(),
+            online: true,
+            status: "active".to_string(),
+        },
+    ];
+}
+
 fn main() -> Result<(), io::Error> {
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     
     terminal.clear()?;
-
-    let runners: Vec<Runner> = vec![];
+    let runners: Vec<Runner> = get_runners();
     let mut events = io::stdin().events();
 
     loop {
