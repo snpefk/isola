@@ -108,8 +108,8 @@ fn main() -> Result<(), io::Error> {
         let c = &events.next().unwrap()?;
         match c {
             Event::Key(Key::Char('q')) => break,
-            Event::Key(Key::Down) => app.next(),
-            Event::Key(Key::Up) => app.previous(),
+            Event::Key(Key::Down) | Event::Key(Key::Char('j')) => app.next(),
+            Event::Key(Key::Up) | Event::Key(Key::Char('k'))=> app.previous(),
             _ => { }
         }
     }
