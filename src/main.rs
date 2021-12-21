@@ -1,3 +1,5 @@
+use reqwest::{header, Client, Url};
+use serde::Deserialize;
 use std::io::{self};
 use termion::event::{Event, Key};
 use termion::input::TermRead;
@@ -8,6 +10,7 @@ use tui::style::{Color, Modifier, Style};
 use tui::widgets::{Block, Borders, Row, Table, TableState};
 use tui::Terminal;
 
+#[derive(Deserialize, Debug)]
 struct Runner {
     id: usize,
     description: String,
@@ -22,44 +25,28 @@ struct Runner {
 struct App {
     state: TableState,
     runners: Vec<Runner>,
+    client: Client,
+    host: Url,
 }
 
 impl App {
-    fn new() -> App {
+    fn new(host: String, token: String) -> App {
+        let mut headers = header::HeaderMap::new();
+        headers.append(
+            "PRIVATE-TOKEN",
+            header::HeaderValue::from_str(&token).unwrap(),
+        );
+
+        let client = Client::builder()
+            .default_headers(headers)
+            .build()
+            .expect("Failed to build HTTP client");
+
         App {
             state: TableState::default(),
-            runners: vec![
-                Runner {
-                    id: 1,
-                    description: "self-hosted runner".to_string(),
-                    ip_address: "127.0.0.1".to_string(),
-                    active: true,
-                    is_shared: false,
-                    name: "android-ci".to_string(),
-                    online: true,
-                    status: "active".to_string(),
-                },
-                Runner {
-                    id: 2,
-                    description: "self-hosted runner".to_string(),
-                    ip_address: "127.0.0.1".to_string(),
-                    active: true,
-                    is_shared: false,
-                    name: "android-ci".to_string(),
-                    online: true,
-                    status: "active".to_string(),
-                },
-                Runner {
-                    id: 3,
-                    description: "self-hosted runner".to_string(),
-                    ip_address: "127.0.0.1".to_string(),
-                    active: false,
-                    is_shared: false,
-                    name: "android-ci".to_string(),
-                    online: true,
-                    status: "active".to_string(),
-                },
-            ],
+            runners: vec![],
+            host: Url::parse(&format!("https://{host}/api/v4/runners/", host = host)).unwrap(),
+            client: client,
         }
     }
 
@@ -90,14 +77,42 @@ impl App {
         };
         self.state.select(Some(i));
     }
+
+    pub async fn update_runners(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.runners = self
+            .client
+            .get(self.host.as_ref())
+            .query(&[("per_page", "100")])
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i > self.runners.len() - 1 {
+                    self.runners.len()
+                } else {
+                    i
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+
+        Ok(())
+    }
 }
 
-fn main() -> Result<(), io::Error> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new();
+    let mut app = App::new(String::from(""), String::from(""));
+    app.update_runners().await?;
+    println!("{:?}", app.runners);
     let mut events = io::stdin().events();
 
     loop {
@@ -109,8 +124,8 @@ fn main() -> Result<(), io::Error> {
         match c {
             Event::Key(Key::Char('q')) => break,
             Event::Key(Key::Down) | Event::Key(Key::Char('j')) => app.next(),
-            Event::Key(Key::Up) | Event::Key(Key::Char('k'))=> app.previous(),
-            _ => { }
+            Event::Key(Key::Up) | Event::Key(Key::Char('k')) => app.previous(),
+            _ => {}
         }
     }
     terminal.clear()?;
