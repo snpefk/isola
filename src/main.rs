@@ -138,21 +138,27 @@ fn create_table(runners: &Vec<Runner>) -> Table {
     let rows: Vec<Row> = runners
         .iter()
         .map(|r| {
+            let shared = if r.is_shared { "✓" } else { "" };
+            let active = if r.active { "✔" } else { "" };
+            let online = if r.online { "✔" } else { "" };
+
             let row = Row::new(vec![
                 r.id.to_string(),
                 r.name.to_string(),
                 r.description.to_string(),
                 r.ip_address.to_string(),
-                r.is_shared.to_string(),
-                r.active.to_string(),
-                r.online.to_string(),
+                shared.to_string(),
+                active.to_string(),
+                online.to_string(),
                 r.status.to_string(),
             ]);
 
-            if r.active {
-                row.style(Style::default().fg(Color::Green))
-            } else {
-                row
+            match &r.status[..] {
+                "active" => row.style(Style::default().fg(Color::Green)),
+                "online" => row,
+                "offline" => row.style(Style::default().fg(Color::Red)),
+                "paused" => row.style(Style::default().fg(Color::Rgb(255, 175, 0))),
+                _ => panic!("Unknown status: {:?}", r),
             }
         })
         .collect();
@@ -163,7 +169,7 @@ fn create_table(runners: &Vec<Runner>) -> Table {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Runners ")
+                .title(format!(" Runners [{}] ", runners.len()))
                 .title_alignment(tui::layout::Alignment::Center),
         )
         .highlight_style(Style::default().bg(Color::DarkGray))
