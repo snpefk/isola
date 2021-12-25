@@ -82,7 +82,7 @@ impl App {
         self.runners = self
             .client
             .get(self.host.as_ref())
-            .query(&[("per_page", "100")])
+            .query(&[("per_page", "100")]) // TODO: add pagination
             .send()
             .await?
             .json()
