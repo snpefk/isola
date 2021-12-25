@@ -106,11 +106,20 @@ impl App {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut args = std::env::args();
+    args.next();
+
+    let host = std::env::var("ISOLA_HOST")
+        .unwrap_or_else(|_| args.next().expect("first argument must be host"));
+
+    let token = std::env::var("ISOLA_TOKEN")
+        .unwrap_or_else(|_| args.next().expect("second argument must be token"));
+
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new(String::from(""), String::from(""));
+    let mut app = App::new(String::from(host), String::from(token));
     app.update_runners().await?;
     println!("{:?}", app.runners);
     let mut events = io::stdin().events();
