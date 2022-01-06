@@ -107,7 +107,7 @@ impl App {
     }
 }
 
-pub async fn get_runners(
+async fn get_runners(
     client: Client,
     host: Url,
 ) -> Result<Vec<Runner>, Box<dyn std::error::Error>> {
@@ -121,7 +121,7 @@ pub async fn get_runners(
     Ok(runner)
 }
 
-pub async fn get_runner_details(
+async fn get_runner_details(
     client: Client,
     host: Url,
     id: &usize,
