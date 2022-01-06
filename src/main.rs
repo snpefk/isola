@@ -200,10 +200,10 @@ fn create_table(runners: &Vec<RunnerDetails>) -> Table {
         "NAME",
         "DESCRIPTION",
         "IP",
+        "STATUS",
         "SHARED",
         "ACTIVE",
         "ONLINE",
-        "STATUS",
         "TAGS",
     ];
 
@@ -221,15 +221,15 @@ fn create_table(runners: &Vec<RunnerDetails>) -> Table {
         )
         .highlight_style(Style::default().bg(Color::DarkGray))
         .widths(&[
-            Constraint::Length(5),
+            Constraint::Length(4),
+            Constraint::Percentage(10),
+            Constraint::Percentage(30),
             Constraint::Length(15),
-            Constraint::Length(40),
-            Constraint::Length(15),
-            Constraint::Length(10),
-            Constraint::Length(8),
-            Constraint::Length(8),
-            Constraint::Length(10),
-            Constraint::Length(40),
+            Constraint::Length(7),
+            Constraint::Length(6),
+            Constraint::Length(6),
+            Constraint::Length(6),
+            Constraint::Percentage(40),
         ])
 }
 
@@ -243,11 +243,11 @@ fn bulid_detailed_row(runner: &RunnerDetails) -> Row<'static> {
         name,
         runner.description.to_string(),
         runner.ip_address.to_string(),
+        runner.status.to_string(),
         convert_str_flag(&runner.is_shared).to_string(),
         convert_str_flag(&runner.active).to_string(),
         convert_str_flag(&runner.online).to_string(),
-        runner.status.to_string(),
-        runner.tag_list.join(","),
+        runner.tag_list.join(" | "),
     ]);
 
     match &runner.status[..] {
