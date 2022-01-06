@@ -1,8 +1,8 @@
 use futures::stream::FuturesUnordered;
-use futures::{stream, StreamExt};
+use futures::StreamExt;
 use reqwest::{header, Client, Url};
 use serde::Deserialize;
-use std::io::{self};
+use std::io;
 use termion::event::{Event, Key};
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
@@ -107,10 +107,7 @@ impl App {
     }
 }
 
-async fn get_runners(
-    client: Client,
-    host: Url,
-) -> Result<Vec<Runner>, Box<dyn std::error::Error>> {
+async fn get_runners(client: Client, host: Url) -> Result<Vec<Runner>, Box<dyn std::error::Error>> {
     let runner = client
         .get(host.as_ref())
         .query(&[("per_page", "100")]) // TODO: add pagination
@@ -131,6 +128,19 @@ async fn get_runner_details(
     Ok(details)
 }
 
+fn build_client(token: String) -> Client {
+    let mut headers = header::HeaderMap::new();
+    headers.append(
+        "PRIVATE-TOKEN",
+        header::HeaderValue::from_str(&token).unwrap(),
+    );
+
+    Client::builder()
+        .default_headers(headers)
+        .build()
+        .expect("Failed to build HTTP client")
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args();
@@ -148,18 +158,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut app = App::new();
 
-    let mut headers = header::HeaderMap::new();
-    headers.append(
-        "PRIVATE-TOKEN",
-        header::HeaderValue::from_str(&token).unwrap(),
-    );
-
-    let client = Client::builder()
-        .default_headers(headers)
-        .build()
-        .expect("Failed to build HTTP client");
     let host = Url::parse(&format!("https://{host}/api/v4/runners/", host = host)).unwrap();
-
+    let client = build_client(token);
     let runners = get_runners(client.clone(), host.clone()).await?;
     let mut group = runners
         .iter()
@@ -247,7 +247,7 @@ fn bulid_detailed_row(runner: &RunnerDetails) -> Row<'static> {
         convert_str_flag(&runner.active).to_string(),
         convert_str_flag(&runner.online).to_string(),
         runner.status.to_string(),
-        runner.tag_list.join(",")
+        runner.tag_list.join(","),
     ]);
 
     match &runner.status[..] {
