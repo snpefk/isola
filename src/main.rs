@@ -1,3 +1,5 @@
+use futures::stream::FuturesUnordered;
+use futures::{stream, StreamExt};
 use reqwest::{header, Client, Url};
 use serde::Deserialize;
 use std::io::{self};
@@ -10,43 +12,65 @@ use tui::style::{Color, Modifier, Style};
 use tui::widgets::{Block, Borders, Row, Table, TableState};
 use tui::Terminal;
 
-#[derive(Deserialize, Debug)]
+enum RunnerInfo {
+    Short(Runner),
+    Details(RunnerDetails),
+}
+
+#[derive(Deserialize, Debug, Clone)]
 struct Runner {
     id: usize,
     description: String,
     ip_address: String,
     active: bool,
     is_shared: bool,
-    name: String,
+    name: Option<String>,
     online: bool,
     status: String,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+struct RunnerDetails {
+    id: usize,
+    description: String,
+    ip_address: String,
+    active: bool,
+    is_shared: bool,
+    name: Option<String>,
+    online: bool,
+    status: String,
+
+    architecture: Option<String>,
+    runner_type: Option<String>,
+    contacted_at: String,
+    platform: Option<String>,
+    projects: Vec<Project>,
+    revision: Option<String>,
+    tag_list: Vec<String>,
+    version: Option<String>,
+    access_level: String,
+    maximum_timeout: Option<i64>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct Project {
+    id: i64,
+    name: String,
+    name_with_namespace: String,
+    path: String,
+    path_with_namespace: String,
+}
+
 struct App {
     state: TableState,
-    runners: Vec<Runner>,
-    client: Client,
-    host: Url,
+    runners: Vec<RunnerDetails>,
 }
 
 impl App {
-    fn new(host: String, token: String) -> App {
-        let mut headers = header::HeaderMap::new();
-        headers.append(
-            "PRIVATE-TOKEN",
-            header::HeaderValue::from_str(&token).unwrap(),
-        );
-
-        let client = Client::builder()
-            .default_headers(headers)
-            .build()
-            .expect("Failed to build HTTP client");
-
+    fn new() -> App {
         App {
             state: TableState::default(),
             runners: vec![],
-            host: Url::parse(&format!("https://{host}/api/v4/runners/", host = host)).unwrap(),
-            client: client,
         }
     }
 
@@ -78,30 +102,33 @@ impl App {
         self.state.select(Some(i));
     }
 
-    pub async fn update_runners(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.runners = self
-            .client
-            .get(self.host.as_ref())
-            .query(&[("per_page", "100")]) // TODO: add pagination
-            .send()
-            .await?
-            .json()
-            .await?;
-
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i > self.runners.len() - 1 {
-                    self.runners.len()
-                } else {
-                    i
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-
-        Ok(())
+    pub fn push_runner(&mut self, runner: RunnerDetails) {
+        self.runners.push(runner);
     }
+}
+
+pub async fn get_runners(
+    client: Client,
+    host: Url,
+) -> Result<Vec<Runner>, Box<dyn std::error::Error>> {
+    let runner = client
+        .get(host.as_ref())
+        .query(&[("per_page", "100")]) // TODO: add pagination
+        .send()
+        .await?
+        .json::<Vec<Runner>>()
+        .await?;
+    Ok(runner)
+}
+
+pub async fn get_runner_details(
+    client: Client,
+    host: Url,
+    id: &usize,
+) -> Result<RunnerDetails, Box<dyn std::error::Error>> {
+    let details_url = host.join(&id.to_string())?;
+    let details = client.get(details_url).send().await?.json().await?;
+    Ok(details)
 }
 
 #[tokio::main]
@@ -119,9 +146,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new(String::from(host), String::from(token));
-    app.update_runners().await?;
-    println!("{:?}", app.runners);
+    let mut app = App::new();
+
+    let mut headers = header::HeaderMap::new();
+    headers.append(
+        "PRIVATE-TOKEN",
+        header::HeaderValue::from_str(&token).unwrap(),
+    );
+
+    let client = Client::builder()
+        .default_headers(headers)
+        .build()
+        .expect("Failed to build HTTP client");
+    let host = Url::parse(&format!("https://{host}/api/v4/runners/", host = host)).unwrap();
+
+    let runners = get_runners(client.clone(), host.clone()).await?;
+    let mut group = runners
+        .iter()
+        .map(|runner| get_runner_details(client.clone(), host.clone(), &runner.id))
+        .into_iter()
+        .collect::<FuturesUnordered<_>>();
+
+    while let Some(item) = group.next().await {
+        app.push_runner(item?);
+    }
+
     let mut events = io::stdin().events();
 
     loop {
@@ -142,7 +191,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn create_table(runners: &Vec<Runner>) -> Table {
+fn create_table(runners: &Vec<RunnerDetails>) -> Table {
     let headers_style = Style::default()
         .fg(Color::Black)
         .add_modifier(Modifier::BOLD);
@@ -155,37 +204,11 @@ fn create_table(runners: &Vec<Runner>) -> Table {
         "ACTIVE",
         "ONLINE",
         "STATUS",
+        "TAGS",
     ];
 
     let headers = Row::new(headers).style(headers_style);
-
-    let rows: Vec<Row> = runners
-        .iter()
-        .map(|r| {
-            let shared = if r.is_shared { "✓" } else { "" };
-            let active = if r.active { "✔" } else { "" };
-            let online = if r.online { "✔" } else { "" };
-
-            let row = Row::new(vec![
-                r.id.to_string(),
-                r.name.to_string(),
-                r.description.to_string(),
-                r.ip_address.to_string(),
-                shared.to_string(),
-                active.to_string(),
-                online.to_string(),
-                r.status.to_string(),
-            ]);
-
-            match &r.status[..] {
-                "active" => row.style(Style::default().fg(Color::Green)),
-                "online" => row,
-                "offline" => row.style(Style::default().fg(Color::Red)),
-                "paused" => row.style(Style::default().fg(Color::Rgb(255, 175, 0))),
-                _ => panic!("Unknown status: {:?}", r),
-            }
-        })
-        .collect();
+    let rows: Vec<Row> = runners.iter().map(|rd| bulid_detailed_row(&rd)).collect();
 
     Table::new(rows)
         .header(headers)
@@ -206,5 +229,40 @@ fn create_table(runners: &Vec<Runner>) -> Table {
             Constraint::Length(8),
             Constraint::Length(8),
             Constraint::Length(10),
+            Constraint::Length(40),
         ])
+}
+
+fn bulid_detailed_row(runner: &RunnerDetails) -> Row<'static> {
+    let name = match &runner.name {
+        Some(n) => n.to_owned(),
+        None => "<unknown>".to_string(),
+    };
+    let row = Row::new(vec![
+        runner.id.to_string(),
+        name,
+        runner.description.to_string(),
+        runner.ip_address.to_string(),
+        convert_str_flag(&runner.is_shared).to_string(),
+        convert_str_flag(&runner.active).to_string(),
+        convert_str_flag(&runner.online).to_string(),
+        runner.status.to_string(),
+        runner.tag_list.join(",")
+    ]);
+
+    match &runner.status[..] {
+        "active" => row.style(Style::default().fg(Color::Green)),
+        "online" => row,
+        "offline" => row.style(Style::default().fg(Color::Red)),
+        "paused" => row.style(Style::default().fg(Color::Rgb(255, 175, 0))),
+        _ => panic!("Unknown status: {:?}", runner),
+    }
+}
+
+fn convert_str_flag(flag: &bool) -> &str {
+    if *flag {
+        "✔"
+    } else {
+        ""
+    }
 }
