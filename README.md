@@ -2,6 +2,19 @@
 
 TUI dashboard for monitoring GitLab Runners.
 
+## Build 
+
+Nothing extra, for standalone binary at `target/release/` just run
+```
+cargo build --release
+```
+
+or to run immediately
+
+```
+cargo run -- <HOST> <TOKEN>
+```
+
 ## Running
 
 To start `isola` you need to specify GitLab host and [personal access token](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html). You can use these options:
