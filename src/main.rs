@@ -244,9 +244,9 @@ fn bulid_detailed_row(runner: &RunnerDetails) -> Row<'static> {
         runner.description.to_string(),
         runner.ip_address.to_string(),
         runner.status.to_string(),
-        convert_str_flag(&runner.is_shared).to_string(),
-        convert_str_flag(&runner.active).to_string(),
-        convert_str_flag(&runner.online).to_string(),
+        format!("{}{}", " ".repeat(2), convert_str_flag(&runner.is_shared)),
+        format!("{}{}", " ".repeat(2), convert_str_flag(&runner.active)),
+        format!("{}{}", " ".repeat(2), convert_str_flag(&runner.online)),
         runner.tag_list.join(" | "),
     ]);
 
